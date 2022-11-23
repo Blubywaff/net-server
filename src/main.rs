@@ -3,31 +3,27 @@ use std::{
     io::{prelude::*, BufReader, BufRead},
     fs,
 };
+use net_server::ThreadPool;
 
 fn main() {
     let listener = match TcpListener::bind("127.0.0.1:7001") {
         Ok(l) => l,
         Err(e) => panic!("{e}")
     };
+    let pool = ThreadPool::new(4).expect("Could not create threads");
     for stream in listener.incoming() {
         let stream = match stream {
             Ok(s) => s,
             Err(e) => panic!("{e}")
         };
-        println!("Got stream");
-        handle_connection(stream);
+        pool.execute(|| {
+            handle_connection(stream);
+        });
     }
 }
 
 fn handle_connection(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&mut stream);
-    /*
-    let http_request: Vec<_> = buf_reader
-        .lines()
-        .map(|result| result.unwrap())
-        .take_while(|line| !line.is_empty())
-        .collect();
-    */
     let request_line = buf_reader.lines().next().unwrap().unwrap();
 
     let (status_line, filename) = if request_line == "GET / HTTP/1.1" {
