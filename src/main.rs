@@ -11,7 +11,7 @@ fn main() {
         Err(e) => panic!("{e}")
     };
     let pool = ThreadPool::new(4).expect("Could not create threads");
-    for stream in listener.incoming() {
+    for stream in listener.incoming().take(2) {
         let stream = match stream {
             Ok(s) => s,
             Err(e) => panic!("{e}")
