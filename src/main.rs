@@ -1,20 +1,23 @@
+use net_server::threading::ThreadPool;
 use std::{
-    net::{TcpListener, TcpStream},
-    io::{prelude::*, BufReader, BufRead},
     fs,
+    io::{prelude::*, BufRead, BufReader},
+    net::{TcpListener, TcpStream},
 };
-use net_server::ThreadPool;
 
 fn main() {
     let listener = match TcpListener::bind("127.0.0.1:7001") {
         Ok(l) => l,
-        Err(e) => panic!("{e}")
+        Err(e) => panic!("{e}"),
     };
     let pool = ThreadPool::new(4).expect("Could not create threads");
-    for stream in listener.incoming().take(2) {
+    for stream in listener.incoming() {
         let stream = match stream {
             Ok(s) => s,
-            Err(e) => panic!("{e}")
+            Err(e) => {
+                println!("{e}");
+                continue;
+            },
         };
         pool.execute(|| {
             handle_connection(stream);
@@ -24,19 +27,14 @@ fn main() {
 
 fn handle_connection(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&mut stream);
-    let request_line = buf_reader.lines().next().unwrap().unwrap();
+    let request_line = buf_reader
+        .lines()
+        .map(|result| result.unwrap())
+        .take_while(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
 
-    let (status_line, filename) = if request_line == "GET / HTTP/1.1" {
-        ("HTTP/1.1 200 OK", "hello.html")
-    } else {
-        ("HTTP/1.1 404 NOT FOUND", "404.html")
-    };
-
-    let contents = fs::read_to_string(filename).unwrap();
-    let length = contents.len();
-
-    let response =
-        format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
-
-    stream.write_all(response.as_bytes()).unwrap();
+    stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").unwrap();
+    stream.write_all(b"hello! You wrote:\r\n").unwrap();
+    stream.write_all(request_line.as_bytes()).unwrap();
 }
